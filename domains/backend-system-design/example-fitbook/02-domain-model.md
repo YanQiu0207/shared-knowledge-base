@@ -15,7 +15,9 @@
 | booking | 管理预约的建立、取消与候补递补，守护「同人同课不重复」 | 预约、候补 |
 | notification | 接收通知任务并投递到短信 / 微信渠道 | 通知任务 |
 
-边界备注：「不超订」（US-7）这个不变量由两处共同守护——余位扣减归 catalog（排期与容量是它的实体），防重复预约归 booking。占位动作由 booking 调用 catalog 提供的「占用 / 释放一个名额」操作完成，保证守护点各自单一。
+边界备注一：「不超订」（US-7）这个不变量由两处共同守护——余位扣减归 catalog（排期与容量是它的实体），防重复预约归 booking。占位动作由 booking 调用 catalog 提供的「占用 / 释放一个名额」操作完成，保证守护点各自单一。
+
+边界备注二：「取消排期」（US-5 的一部分）是跨模块用例——翻转排期状态（catalog）、级联取消预约与候补（booking）、通知受影响会员（notification）必须在同一事务内完成（见 05 文档事务 3）。该用例由 booking 编排：它是唯一已同时依赖其余三个模块的模块，编排不引入新依赖边，依赖图保持无环。
 
 ## 模块依赖图
 
@@ -36,9 +38,9 @@ graph LR
 | US-2 浏览课表 | catalog | |
 | US-3 预约 | booking | 经 catalog 占位 |
 | US-4 取消 | booking | 经 catalog 释放名额 |
-| US-5 管理排期 | catalog | |
+| US-5 管理排期 | catalog | 取消排期的级联处理由 booking 编排（见边界备注二） |
 | US-6 预约名单 | booking | 预约数据归 booking，由它提供管理端查询 |
-| US-7 不超订 | catalog + booking | 见上文边界备注 |
+| US-7 不超订 | catalog + booking | 见边界备注一 |
 | US-8 候补 | booking | |
 | US-9 通知 | notification | 任务由 booking 在事务内产生 |
 
