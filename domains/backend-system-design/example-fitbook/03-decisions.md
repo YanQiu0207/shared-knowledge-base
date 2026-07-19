@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: synthetic-fitbook-case-study
+source_version: 2026-07-12
+applies_to: learning how to record architecture decisions and tradeoffs
+excludes: direct adoption without project-specific evidence
+---
+
 # 阶段 3：架构选型与决策
 
 > 真实项目中每条 ADR 单独一个文件放 `docs/adr/`，本示例为方便阅读合并在一页。

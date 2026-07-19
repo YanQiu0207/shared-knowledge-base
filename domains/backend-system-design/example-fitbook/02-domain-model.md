@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: synthetic-fitbook-case-study
+source_version: 2026-07-12
+applies_to: learning domain grouping and invariant ownership
+excludes: direct use as a production domain model
+---
+
 # 阶段 2：领域建模
 
 > 本页模块划分的推导过程（分组判据、余位 / 教练 / 名单的归属裁决）见[从实体到模块划分](../entities-to-modules.md)末尾的完整演示。

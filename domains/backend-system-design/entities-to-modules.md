@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: internal-synthesis-and-fitbook-example
+source_version: 2026-07-12
+applies_to: modular monolith and small service boundary design
+excludes: systems whose boundaries are fixed by regulation or existing platform contracts
+---
+
 # 从实体到模块划分
 
 ## 结论

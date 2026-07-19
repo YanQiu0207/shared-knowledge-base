@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: synthetic-fitbook-case-study
+source_version: 2026-07-12
+applies_to: learning relational data modelling for a small booking system
+excludes: direct execution in a production database
+---
+
 # 阶段 4b：数据模型
 
 ## 全局约定

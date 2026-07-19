@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: synthetic-fitbook-case-study
+source_version: 2026-07-12
+applies_to: learning HTTP API contract design for a small booking system
+excludes: direct use as a stable or production API contract
+---
+
 # 阶段 4a：API 契约
 
 ## 全局约定（先定一次，所有接口遵守）

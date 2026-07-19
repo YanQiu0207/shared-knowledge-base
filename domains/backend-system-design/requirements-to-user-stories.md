@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: internal-synthesis-and-fitbook-example
+source_version: 2026-07-12
+applies_to: early-stage product requirements expressed as informal user needs
+excludes: formally specified regulated requirements requiring independent validation
+---
+
 # 从原始需求到用户故事
 
 ## 结论

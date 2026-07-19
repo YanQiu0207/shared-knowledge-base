@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: synthetic-fitbook-case-study
+source_version: 2026-07-12
+applies_to: learning the requirements stage of the backend design method
+excludes: direct use as requirements for a real booking product
+---
+
 # 阶段 1：需求一页纸
 
 > 本页故事清单的推导过程（从店主原话到 US 编号）见[从原始需求到用户故事](../requirements-to-user-stories.md)末尾的完整演示。

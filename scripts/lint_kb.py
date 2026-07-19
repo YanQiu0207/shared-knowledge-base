@@ -6,7 +6,7 @@
 2. 根索引分类表与顶层目录一一对应；索引表链接目标存在。
 3. 行数预算：根索引 <= 60 行；主题索引 <= 100 行；条目 <= 400 行。
 4. 条目（domains/、issues/ 下非 index 文件）frontmatter 必填
-   status / source / source_version。
+   status / source / source_version / applies_to / excludes，且禁止项目作用域。
 
 用法：python scripts/lint_kb.py [--root <知识库根目录>]
 退出码：0 全过；1 有违规；2 目录结构不可用。
@@ -22,9 +22,15 @@ from pathlib import Path
 MAX_ROOT_INDEX_LINES = 60
 MAX_TOPIC_INDEX_LINES = 100
 MAX_ENTRY_LINES = 400
-REQUIRED_FRONTMATTER_KEYS = ("status", "source", "source_version")
+REQUIRED_FRONTMATTER_KEYS = (
+    "status",
+    "source",
+    "source_version",
+    "applies_to",
+    "excludes",
+)
 # 非知识内容的顶层目录：不要求出现在根索引分类表；点前缀目录一并忽略。
-IGNORED_TOP_DIRS = {"scripts"}
+IGNORED_TOP_DIRS = {"projects", "scripts"}
 # 条目检查（行数预算 + frontmatter）只覆盖知识条目所在目录。
 ENTRY_DIRS = ("domains", "issues")
 LINK_PATTERN = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -138,6 +144,13 @@ def _check_frontmatter(rel: str, lines: list[str], problems: list[str]) -> None:
     missing = [key for key in REQUIRED_FRONTMATTER_KEYS if key not in keys]
     if missing:
         problems.append(f"{rel}：frontmatter 缺少字段 {', '.join(missing)}")
+    fields = {
+        line.split(":", 1)[0].strip(): line.split(":", 1)[1].strip()
+        for line in body
+        if ":" in line
+    }
+    if fields.get("scope", "").lower() == "project":
+        problems.append(f"{rel}：公共条目禁止 scope: project")
 
 
 def main(argv: list[str]) -> int:

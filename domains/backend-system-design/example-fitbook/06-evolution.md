@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: synthetic-fitbook-case-study
+source_version: 2026-07-12
+applies_to: learning incremental delivery and evolution planning
+excludes: project plans without independent capacity and risk validation
+---
+
 # 阶段 5：实现与演进
 
 ## 骨架切片（walking skeleton）

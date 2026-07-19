@@ -11,15 +11,14 @@
 | 跨项目方法 | 可跨项目复用的方法、概念和实践 | [`domains/`](domains/) |
 | 已验证踩坑 | 已查证的现象、根因、修复和边界 | [`issues/`](issues/) |
 | 原始资料 | 原始文章与官方资料 | [`sources/`](sources/) |
-| 项目指针 | 各项目知识权威位置的索引 | [`projects/`](projects/) |
-| 待归档增量 | 无项目归属的个人任务增量 | [`changes/`](changes/) |
+| 公共库治理 | 仅记录公共知识库自身的治理变更，禁止存放项目知识候选 | [`changes/`](changes/) |
 | 退役内容 | 整体退役的主题或项目 | [`archives/`](archives/) |
 
 ## 查询规则
 
 1. 查询顺序固化为：本文件「结论 + 索引表」→ 主题索引「结论」→ 条目正文；每一跳先读结论，再决定是否下钻。
 2. 两跳未命中 → 允许在 `domains/`、`issues/` 范围内 grep 兜底，禁止全库通配检索。
-3. 无论兜底是否命中，检索失败案例追加到 [`changes/retrieval-failures.md`](changes/retrieval-failures.md)（问题、期望命中、实际结果）。
+3. 无论兜底是否命中，检索失败案例追加到 [`changes/retrieval-failures.md`](changes/retrieval-failures.md)（问题、期望命中、实际结果）。`changes/` 只记录公共库自身治理，禁止存放项目知识候选。
 4. 检索预算（初值，阶段一验收后校准）：
     - 单次任务从知识库加载条目文件 ≤ 3 个；确需更多，先向用户说明原因。
     - 根索引 ≤ 60 行；主题索引 ≤ 100 行。
@@ -32,12 +31,13 @@
 2. 行级追加 / 修改优先，禁止整篇重写（用户明确要求重置除外）。
 3. Git 冲突禁止 silent merge——停下、展示 diff、等用户裁决。
 4. 多个 CLI 并发写本库时，写前先 `git pull --ff-only`，失败即停。
-5. 知识条目（`domains/`、`issues/` 下非 index 文件）frontmatter 必填 `status`、`source`、`source_version`。
+5. 知识条目（`domains/`、`issues/` 下非 index 文件）frontmatter 必填 `status`、`source`、`source_version`、`applies_to`、`excludes`；禁止 `scope: project`。
+6. 项目知识候选必须留在项目内或交付报告中，完成用户确认、泛化和脱敏后才能进入 `domains/` 或 `issues/`。
 
 行数预算与结构约束由 `scripts/lint_kb.py` 机器检查。
 
 ## 当前状态
 
-- 阶段一进行中。
+- 阶段一结构治理已完成。
 - 已导入首批知识条目（见 `domains/`）。
 - 尚未完成真实问题验收。

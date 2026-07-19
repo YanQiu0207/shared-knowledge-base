@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: internal-synthesis-and-fitbook-example
+source_version: 2026-07-12
+applies_to: small-to-medium backend projects and teams of one to five people
+excludes: high-concurrency or data-intensive systems requiring specialised design
+---
+
 # 中小型后端项目系统设计方法论
 
 ## 结论
