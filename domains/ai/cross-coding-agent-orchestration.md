@@ -1,7 +1,7 @@
 ---
 status: provisional
 source: OpenAI Codex and Anthropic Claude Code official documentation plus linked GitHub repositories
-source_version: 2026-07-19
+source_version: 2026-07-22
 applies_to: local coding-agent workflows that need native delegation or cross-product agent invocation
 excludes: hosted agent platforms without local CLI or MCP access and production use without independent security review
 ---
@@ -52,6 +52,35 @@ claude -p "审查当前 git diff，只报告能通过代码证据确认的问题
 ```
 
 Skill 应明确工作目录、权限、超时、输出协议和会话恢复方式。只做交叉审查时，应禁止外部 Agent 写入代码。
+
+如果需要在 Codex 会话内结构化调用 Claude，可使用第三方 [`claude-in-codex`](https://github.com/briandconnelly/claude-in-codex) 插件：
+
+```text
+codex plugin marketplace add briandconnelly/claude-in-codex
+codex plugin add claude-in-codex --marketplace claude-in-codex
+```
+
+重启 Codex 后，先调用 `claude_status` 检查 Claude CLI 和认证状态，再调用 `claude_review_changes` 审查当前工作区、暂存区或分支。调用时应显式传入绝对 `workspace_root`，避免 Claude 在错误目录中执行。该插件默认面向只读审查，提供同步、异步和对抗性审查工具；付费工具会把代码和提示发送给 Anthropic，并可能产生调用成本。
+
+### Codex 插件安装排障
+
+`codex plugin marketplace add` 只添加插件市场，不会安装具体插件。添加市场成功后，必须显式指定市场安装插件：
+
+```bash
+codex plugin add claude-in-codex --marketplace claude-in-codex
+```
+
+也可以使用完整选择器：
+
+```bash
+codex plugin add claude-in-codex@claude-in-codex
+```
+
+安装完成后，可用 `codex plugin list` 检查插件是否为 `installed, enabled`。插件工具通常在 Codex 进程启动时加载，因此首次安装或升级后需要重启 Codex；否则当前会话的工具列表中可能仍没有 `claude_status` 和 `claude_review_changes`。
+
+如果不需要 MCP 或插件，也可以直接从 Codex 执行 `claude -p`。Claude Code 官方将该模式定义为程序化、非交互调用；脚本或 CI 可考虑使用 `--bare`，减少 Skill、插件、MCP 和自动记忆等外部状态的影响。该方式是「Codex → Shell → Claude Code」，不是 Codex 原生切换 Claude 模型。
+
+注意区分调用方向：`openai/codex-plugin-cc` 是 Claude Code 调用 Codex 的反向方案，不是 Codex 调用 Claude Code 的实现。
 
 ## Claude Code 内的调用方式
 
@@ -124,6 +153,8 @@ Codex
 - [Claude Code Subagents](https://code.claude.com/docs/en/sub-agents)
 - [Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams)
 - [Run Claude Code programmatically](https://code.claude.com/docs/en/headless)
+- [Codex CLI Reference](https://developers.openai.com/codex/cli/reference)
+- [claude-in-codex](https://github.com/briandconnelly/claude-in-codex)
 - [Connect Claude Code to tools via MCP](https://code.claude.com/docs/en/mcp)
 
-本条目的证据等级为 `provisional`：官方文档能证明原生子 Agent、非交互 CLI 和 MCP 接入能力；第三方编排项目的安全性、稳定性与 Windows 兼容性仍需在实际环境中独立验证。
+本条目的证据等级为 `provisional`：官方文档能证明原生子 Agent、非交互 CLI 和 MCP 接入能力；`claude-in-codex` 的 Codex → Claude 桥接方式、权限边界、费用和 Windows 兼容性仍需在实际环境中独立验证。
