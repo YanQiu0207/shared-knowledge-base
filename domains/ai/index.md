@@ -10,3 +10,5 @@
 - [Coding Plan 订阅选型：OpenCode Go、Zen、智谱国际区与 Claude Pro](coding-plan-subscription-selection.md)
 - [Kimi 接入 Claude Code 与 Codex 的协议兼容差异](kimi-claude-code-codex-protocol-compatibility.md) — Claude Code 可直连官方 Anthropic 端点，Codex 须转译层
 - [Codex 与 Claude Code 调用其他 Coding Agent](cross-coding-agent-orchestration.md) — 优先原生子 Agent，跨产品委派用 Skill/MCP
+- [Agent 优先编码的轻量 Harness 演进](agent-first-lightweight-harness.md) — 原生 Agent 优先，编排按风险启用
+- [Agent Harness 的分层评测：能力、路由与交付证据](agent-harness-evaluation-stack.md) — 分离公开修复能力、路由安全和交付声明
