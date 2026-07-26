@@ -86,6 +86,37 @@ excludes: Codex CLI 本身的安装排障与登录合规、Codex 模型能力评
 - 不要期待 `/codex:review` 改代码；它是只读审查。要修代码用 `/codex:rescue`。
 - 不要在 `/codex:review` 后追加 focus 文本，会被忽略；带焦点必须用 `/codex:adversarial-review`。
 - 不要跳过 `/codex:setup` 直接用；CLI 未登录或未安装时命令会失败，且错误信息不一定直观。
+- **不要用 `/codex:adversarial-review` 审非 git-diff 内容时不给文件面**。见下节。
+
+## 实战踩坑：审设计文档与卡死诊断
+
+一次用 `/codex:adversarial-review` 审一组已提交的 Markdown 设计文档（proposal + tasks）的过程，踩了三个坑，均有本机日志佐证。
+
+**坑一：review 只吃 git diff，喂不进文件就是空审。**
+
+`adversarial-review` 的审查面来自 `git diff`（Commit Log / Diff Stat / Branch Diff）。目标 change 已提交、工作区干净时，不带 `--base` 跑会返回 `needs-attention` 加「review surface is empty（三项全 `none`）」——它根本没读到任何文件。focus 文本里写「去读某某目录」**不能替代** `--base` 给出的 diff 面。审已提交内容必须带 `--base <ref>` 圈定范围。
+
+**坑二：`--base` 圈多大，它就审多大，含无关改动。**
+
+`--base X..HEAD` 会把整个区间的 diff 都喂进去，包括区间里混入的他人 commit、归档搬迁、代码改动。审 9 个设计文档时区间里混进了另一个 change 的实现代码与归档移动，审查面从 21 文件膨胀到 34 文件。后果不只是慢——见坑三。
+
+**坑三：要求「核对引用的源码行号」会把审查拖成长任务甚至卡死。**
+
+设计文档引用了 `validate_change.py:570` 这类行号。若在 focus 里要求「核对行号是否真实」，Codex 会去逐个打开几千行的源码文件比对，审查变成多阶段调查。实测一次 2800 行 diff 加源码核对，主线程派子 agent 后日志停在「collaboration tool: wait」37 分钟无进展：进程已死（`taskkill /PID <pid>` 报 not found），但 job 记录卡在 `running`，`/codex:cancel` 返回 `no active turn to interrupt`——主轮推理其实已结束，只是 turn 未正确收尾。这是「主线程干完但子 agent 收尾未对齐」的僵死形态，**等不会恢复**。
+
+**对的做法：审设计文档改成「直喂文件 + design-only」。**
+
+- focus 里直接列目录路径，并**显式声明**「纯设计文档，按设计审，不要逐行核对源码行号」。第一次空跑已证明直喂路径 1.5 分钟就能返回。
+- 不要带 `--base` 走 git diff 模式；那是审代码改动的路径，不适合 Markdown 设计文档。
+- 对抗性审查设计文档时，重点放在逻辑自洽、跨文档依赖、与已批准规格的冲突，而不是行号核对。
+
+**坑四（最关键）：审核面必须包含「上游授权」文档，否则结论基于过时前提。**
+
+一组 change 依赖一个更早的「边界裁决」change（把「禁止合并」改为「条件式授权」）。第一次审核没把这个上游 change 圈进 diff 面，Codex 于是拿「禁止合并」的旧条文去否定后续 change，报了一条 critical。把上游 change 补进审核面后复审，该 critical 降为「部分解决」。**教训：审核一组有依赖关系的 change 时，`--base` 或文件面必须覆盖到最上游的那条授权／裁决文档**，否则审查会用已被取代的旧规则判新文档，得出看似严重实则过时的结论。
+
+**`status` 与 `result` 的 job-id 不是 Claude Code 的后台任务号。**
+
+后台跑时 Claude Code 给的是它自己的 shell 任务 ID（如 `bbvzgcrfs`），`/codex:status <id>` 查不到。要用 `/codex:status` 列出的真实 job-id（形如 `review-<xxxx>-<yyyy>`）。临时输出文件只有启动日志，不是结果；结果用 `/codex:result <job-id>` 取。监视 job 时 grep status 输出里的 `completed|failed`，不要盯日志文件流——日志流结束不等于 job 完成，会误报。
 
 ## 与通用方法的关系
 
@@ -96,5 +127,6 @@ excludes: Codex CLI 本身的安装排障与登录合规、Codex 模型能力评
 - [openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc)
 - 插件内 `commands/*.md`（review / adversarial-review / rescue / status / result / cancel / setup 的 argument-hint 与执行规则）。
 - 本机验证：codex-cli 0.145.0 + 插件 1.0.4，`/codex:setup --json` 返回 `ready: true`。
+- 「实战踩坑」一节为本机 2026-07-26 实测：空审（review surface empty）、`--base` 范围膨胀、行号核对导致 job 僵死（进程已死但记录卡 `running`、`cancel` 报 `no active turn to interrupt`）、以及上游授权文档缺失导致 critical 误判后复审降级，均有 job 日志与 status 输出佐证。
 
 本条目状态为 `provisional`：命令与参数基于插件 1.0.4 的 command 文件和一次 setup 验证；不同插件版本或 codex-cli 版本的参数集合、默认行为（尤其后台执行与 review-gate）可能变化。升级后应重新核对命令定义。
