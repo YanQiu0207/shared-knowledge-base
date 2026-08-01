@@ -131,6 +131,24 @@ Windows 下让 Hook 进程拿到这些变量的两条路径：
 
 性能参考：首次加载模型约 70 s（一次性），暖推理约 2–3 s/次。
 
+## 开机自启（Windows 实证）
+
+服务进程不随开机常驻，需配置自启。两种方式：
+
+1. **任务计划程序（推荐，支持崩溃自愈）**——触发器「用户登录时」，动作 `powershell.exe -WindowStyle Hidden -Command "agentmemory"`，设 `RestartCount` 与 `ExecutionTimeLimit = Zero`。但 `Register-ScheduledTask` 在部分机器（组策略或 UAC）会「拒绝访问」，需管理员权限。
+
+2. **注册表 `HKCU:\Software\Microsoft\Windows\CurrentVersion\Run`（用户级兜底，无需管理员）**——任务计划拒访时使用：
+
+    ```powershell
+    $amCmd = "$env:APPDATA\npm\agentmemory.cmd"
+    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" `
+        -Name "AgentMemory" -Value "powershell.exe -WindowStyle Hidden -NoProfile -Command `"& '$amCmd'`""
+    ```
+
+    登录时 explorer 自动触发，隐藏窗口启动。**局限**：无 `RestartCount`，崩溃不自动重启。
+
+无论哪种方式，用 `.cmd` 全路径而非 `.ps1`——避开 ExecutionPolicy 限制（`RemoteSigned` 下本地 `.ps1` 一般可执行，但 `.cmd` 无此风险）。验证：注销重登后执行 `agentmemory status`，或查看 `~/.agentmemory/server.stderr.log` 的 Provider 行。
+
 ## 使用方法
 
 - **日常使用**：让 Hook 自动捕获会话事件；将自动注入的上下文视为候选信息，并以当前证据核实。
