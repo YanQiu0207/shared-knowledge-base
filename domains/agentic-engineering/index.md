@@ -9,3 +9,4 @@
 - [知识与代码冲突处理](knowledge-code-conflict-handling.md)
 - [TencentDB Agent Memory 接入 Claude Code 与 Codex](tencentdb-agent-memory-claude-codex.md)
 - [AgentMemory：跨 Coding Agent 的本地持久化记忆层](agentmemory.md)
+- [多 Agent 协作工程协议设计（AWS sample-codex-agent-team 样例）](multi-agent-collaboration-protocol.md)
