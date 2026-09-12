@@ -33,12 +33,20 @@ REQUIRED_FRONTMATTER_KEYS = (
 IGNORED_TOP_DIRS = {"projects", "scripts"}
 # 条目检查（行数预算 + frontmatter）只覆盖知识条目所在目录。
 ENTRY_DIRS = ("domains", "issues")
+# rglob 走文件系统、不认 .gitignore，需显式跳过依赖目录，否则会把已安装包自带的
+# README 当作知识条目检查。
+IGNORED_DIR_NAMES = {"node_modules"}
 LINK_PATTERN = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
 def _read_lines(path: Path) -> list[str]:
     # utf-8-sig：兼容 Windows 工具写出的带 BOM 文件，避免 frontmatter 误报。
     return path.read_text(encoding="utf-8-sig").splitlines()
+
+
+def _is_ignored(rel: Path) -> bool:
+    """相对知识库根目录的路径中含被忽略目录名时返回 True。"""
+    return any(part in IGNORED_DIR_NAMES for part in rel.parts)
 
 
 def _link_targets(line: str) -> list[str]:
@@ -94,6 +102,8 @@ def _check_topic_indexes(root: Path, problems: list[str]) -> None:
             problems.append(f"{rel}：缺少「结论」章节")
 
     for index in sorted(domains.rglob("index.md")):
+        if _is_ignored(index.relative_to(root)):
+            continue
         rel = index.relative_to(root).as_posix()
         lines = _read_lines(index)
         if len(lines) > MAX_TOPIC_INDEX_LINES:
@@ -114,7 +124,7 @@ def _check_entries(root: Path, problems: list[str]) -> None:
         if not base.is_dir():
             continue
         for entry in sorted(base.rglob("*.md")):
-            if entry.name == "index.md":
+            if entry.name == "index.md" or _is_ignored(entry.relative_to(root)):
                 continue
             rel = entry.relative_to(root).as_posix()
             lines = _read_lines(entry)

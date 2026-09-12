@@ -8,6 +8,7 @@
 
 - [GLM-5.2 多云服务差异与选型](glm-5.2-multi-cloud-service-differences.md)
 - [Coding Plan 订阅选型：OpenCode Go、Zen、智谱国际区与 Claude Pro](coding-plan-subscription-selection.md)
+- [GLM Coding Plan 与 DeepSeek API 选型：订阅额度 vs 按量计费](glm-coding-plan-vs-deepseek-api.md) — 高频选订阅、低频选按量，5 小时滚动窗口是订阅套餐的真实瓶颈
 - [Kimi 接入 Claude Code 与 Codex 的协议兼容差异](kimi-claude-code-codex-protocol-compatibility.md) — Claude Code 可直连官方 Anthropic 端点，Codex 须转译层
 - [CCS：保留 Claude Code 的多供应商并行 Profile](ccs-multi-profile-claude-code.md) — 多 Profile 独立启动，OpenAI 兼容接口按 Profile 使用本地转译端口
 - [Codex 与 Claude Code 调用其他 Coding Agent](cross-coding-agent-orchestration.md) — 优先原生子 Agent，跨产品委派用 Skill/MCP

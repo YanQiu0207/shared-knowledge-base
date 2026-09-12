@@ -1,3 +1,12 @@
+---
+scope: cross-project
+status: provisional
+source: first-hand code analysis of github.com/aws-samples/sample-codex-agent-team (main branch); runtime gaps from a secondary analysis article
+source_version: 2026-08-02
+applies_to: designing multi-agent collaboration protocols where agents share one code repository
+excludes: production-readiness claims, Windows compatibility, non-Codex stacks, enterprise or data-compliance deployments
+---
+
 # 多 Agent 协作工程协议设计——以 AWS sample-codex-agent-team 为样例
 
 > 本条目保存可跨项目复用的「多 Agent 共享代码仓库协作」协议设计方法，源自 AWS sample-codex-agent-team 的一手代码分析。只作通用参考；与具体项目实现冲突时以项目代码、配置和运行证据为准。
