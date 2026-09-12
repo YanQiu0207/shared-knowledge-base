@@ -197,12 +197,13 @@ requires_openai_auth = true
 
 [model_providers.team-proxy.http_headers]
 x-tdai-user-key = "<memory-user-key>"
-x-team-id = "<team-id>"
-x-agent-id = "<agent-id>"
-x-task-id = "no-task"
 ```
 
 Codex 必须先通过 ChatGPT OAuth 登录。`requires_openai_auth = true` 让客户端把 OAuth 放进 `Authorization`；`http_headers` 中的 Memory User Key 供 Proxy 鉴权，两者不能互换。
+
+默认不预填 `x-team-id`、`x-agent-id`、`x-task-id`，使新会话与 Claude Code 一样进入交互式资产关联。首次请求前需切到 Plan 模式，以便 Codex 接收 `request_user_input` 表单。
+
+只有自动化测试、CI、健康检查或无人值守诊断需要避免交互表单时，才额外预填 Team、Agent 和 Task Header。预填后 Proxy 会自动关联并跳过表单；这是测试与运维手段，不是面向用户的默认接入方式。
 
 ### 5. 最小验收清单
 
@@ -211,6 +212,7 @@ Codex 必须先通过 ChatGPT OAuth 登录。`requires_openai_auth = true` 让�
 3. Proxy 日志显示 sessionInit 成功、`totalBlockCount=4`、`tdai-recorder:write-l0`。
 4. Claude Code 正常回答，Memory Bridge 地址使用 `127.0.0.1:8097`，`atomic/search` 返回 `code=0`。
 5. 未带 Memory User Key 请求 `/codex/default/v1/models` 时返回 HTTP 401。
+6. Codex 新会话在 Plan 模式弹出资产关联表单；选择后日志显示对应 Team 与 Agent 初始化成功。
 
 ### 6. Hook 与 MCP 收尾
 
