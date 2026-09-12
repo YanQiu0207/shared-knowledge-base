@@ -21,7 +21,7 @@ TencentDB Agent Memory 有两条接入路径，容易混淆：
 
 Proxy 方案的**核心约束是模型绑定**：proxy 只做转发、不做模型名映射，因此客户端必须显式指定一个「上游真实支持」的模型名。用哪个模型不取决于本工具，取决于你把上游指向了哪家。
 
-由这条约束派生出一个结构性限制：**订阅制账号（ChatGPT Plus / Claude Pro 等）用不了本工具**，因为它们走 OAuth 直连厂商后端，而 proxy 只支持 API key 形态的上游。
+由这条约束派生出一个结构性限制：订阅制账号通常走 OAuth 直连厂商后端，不能直接套用只接受 API Key 的 Proxy 配置。Codex 存在已实测的双凭据例外，见下文；Claude Code 订阅链路尚未验证同类方案。
 
 另有一条客户端侧的配套约束：Claude Code 不认识第三方模型名时会按 200k 兜底上下文窗口，需要在模型名后加 `[1M]` 标记声明（见下文「第三方模型的窗口标记」）。
 
@@ -73,11 +73,38 @@ memory 工具必须插在「客户端 → 模型」链路中间才能注入记�
 | 裸客户端 + API key（指向 proxy） | 客户端 → proxy → 上游 | 是 |
 | 包装脚本指向 proxy | 同上 | 是 |
 
-订阅与 proxy 二者不能同时生效——这是结构性的，不是配置问题。
+传统单凭据配置下，订阅与 Proxy 不能同时生效；根因是上游 OAuth 与 Memory User Key 竞争同一个 `Authorization` Header。若客户端允许追加独立 Header，且 Proxy 能分离两类凭据，则可解除该冲突。
 
 > 订阅制仍有一条可用路径：**客户端 Hook**（见[Hook 接入（免 proxy）](tencentdb-agent-memory-hook-mode.md)）不占用模型链路，因此订阅登录与记忆注入可以并存，代价是资产上下文需要自行补齐。
 
-> **已验证的 Codex 例外（2026-09-12）**：Codex 自定义 provider 同时启用 `requires_openai_auth = true` 与 `http_headers`，可用 `Authorization` 透传 ChatGPT OAuth，并用 `x-tdai-user-key` 单独完成 Memory Proxy 鉴权。Proxy 需优先从 `x-tdai-user-key` 取 Memory 凭证、禁止将该 Header 转发到上游，并保持 Codex 上游 API Key 为空。独立 `8097` 实例实测完成 sessionInit、注入 4 个上下文块、转发 `https://chatgpt.com/backend-api/codex/responses` 返回 HTTP 200，并成功写入 L0。该方案仍未核查订阅流量经自建代理转发的合规性。
+> **已验证的 Codex 例外（2026-09-12）**：Codex 自定义 provider 同时启用 `requires_openai_auth = true` 与 `http_headers`，可用 `Authorization` 透传 ChatGPT OAuth，并用 `x-tdai-user-key` 单独完成 Memory Proxy 鉴权。Proxy 需优先从 `x-tdai-user-key` 取 Memory 凭证，并禁止将该 Header 转发到上游。实测完成 sessionInit、注入 4 个上下文块、转发 `https://chatgpt.com/backend-api/codex/responses` 返回 HTTP 200，并成功写入 L0。该方案仍未核查订阅流量经自建代理转发的合规性。
+
+### Claude Code 与 Codex 共用一个 Proxy
+
+两种客户端可以共用同一个 Proxy 实例，因为路由前缀和协议不同：Claude Code 使用 `/claude-code/<instance>/v1/messages`，Codex 使用 `/codex/<instance>/v1/responses`。配置时保留 Claude Code 所需的全局 Anthropic 上游及 API Key，再为 Codex 设置独立上游：
+
+```yaml
+upstream:
+  url: "https://open.bigmodel.cn/api/anthropic/v1"
+  apiKey: "<anthropic-api-key>"
+  agents:
+    codex:
+      url: "https://chatgpt.com/backend-api/codex"
+```
+
+这里 `upstream.agents.codex.apiKey` 必须缺省：其语义是「Codex 显式选择独立上游，但沿用客户端传入的 OAuth」，不能回退到全局 Anthropic API Key。Proxy 的授权优先级应为：
+
+1. 存在 Agent 上游且配置了 API Key → 使用 Agent API Key。
+2. 存在 Agent 上游但未配置 API Key → 保留客户端 `Authorization`。
+3. 不存在 Agent 上游 → 使用全局 API Key。
+
+本机共享实例验证中，Codex 通过该配置返回 HTTP 200，完成 4 个上下文块注入与 L0 写入。Claude Code 在同一实例中已完成 sessionInit 与 4 个上下文块注入，但智谱上游当时连接失败；旧独立实例同时出现相同 502，因此 Claude 上游成功应答仍待上游恢复后补验。
+
+### 从 Hook 切换到 Proxy 后的清理
+
+Proxy 已自动完成提示注入和会话归档时，原 TDAI Memory 的 `UserPromptSubmit` 与 `SessionEnd` Hook 会形成重复链路，可以解除注册。建议先保留 Hook 文件和带时间戳的客户端配置备份，待 Proxy 端到端验证稳定后再决定是否物理删除。
+
+Memory MCP 不与 Proxy 完全重复：Proxy 负责自动注入与记录，MCP 提供显式检索或写入工具。需要主动检索能力时可保留 MCP；不要把移除重复 Hook 等同于移除 MCP。
 
 ## 客户端接入
 
@@ -107,7 +134,10 @@ disable_response_storage = true      # ← 必须顶层
 [model_providers.tdai]
 wire_api = "responses"
 base_url = "http://127.0.0.1:8096/codex/default/v1"
-experimental_bearer_token = "<user_key>"
+requires_openai_auth = true
+
+[model_providers.tdai.http_headers]
+x-tdai-user-key = "<memory-user-key>"
 ```
 
 Codex 有三个与 Claude Code 不同的硬约束：
