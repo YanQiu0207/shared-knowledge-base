@@ -77,7 +77,7 @@ memory 工具必须插在「客户端 → 模型」链路中间才能注入记�
 
 > 订阅制仍有一条可用路径：**客户端 Hook**（见[Hook 接入（免 proxy）](tencentdb-agent-memory-hook-mode.md)）不占用模型链路，因此订阅登录与记忆注入可以并存，代价是资产上下文需要自行补齐。
 
-> **未验证的例外**：Codex 二进制中存在 `requires_openai_auth` 字段（可把 ChatGPT token 发给自定义 provider），而 proxy 支持透传客户端 Authorization。二者组合在理论上可实现「订阅 + 记忆注入」，但需关闭 proxy 自身 auth 并手工指向厂商后端，**未实测**；且订阅流量绕经中间层的合规性未查证。
+> **已验证的 Codex 例外（2026-09-12）**：Codex 自定义 provider 同时启用 `requires_openai_auth = true` 与 `http_headers`，可用 `Authorization` 透传 ChatGPT OAuth，并用 `x-tdai-user-key` 单独完成 Memory Proxy 鉴权。Proxy 需优先从 `x-tdai-user-key` 取 Memory 凭证、禁止将该 Header 转发到上游，并保持 Codex 上游 API Key 为空。独立 `8097` 实例实测完成 sessionInit、注入 4 个上下文块、转发 `https://chatgpt.com/backend-api/codex/responses` 返回 HTTP 200，并成功写入 L0。该方案仍未核查订阅流量经自建代理转发的合规性。
 
 ## 客户端接入
 
