@@ -61,10 +61,11 @@ Hook 是三条接入路径里唯一不占用模型链路的一条：它跑在客
 
 ### Codex
 
-配置位于 `~/.codex/hooks.json`，事件名与 JSON 字段大体同构。两个差异必须记住：
+配置位于 `~/.codex/hooks.json`，`UserPromptSubmit` 的输入是通用字段加 `turn_id` 与 `prompt`。三个差异必须记住：
 
 - `SessionEnd` 的超时被硬限制在 1–3 秒，配置更大的值会被收窄，归档必须压缩成一次短请求。
-- hook 需要先在交互模式用 `/hooks` 信任一次，否则配置了也不会执行。
+- 每条 hook 输出默认只有约 2500 token 进入模型上下文，超出部分落盘、只给头尾预览；要放行更多需在该 handler 上设 `additionalContextLimit`（`0` 表示不截断）。
+- hook 必须先在交互模式用 `/hooks` 信任，否则**不报错、直接跳过**。
 
 ## 客户端侧资产注入
 
@@ -86,16 +87,22 @@ Hook 默认没有 team/agent/task 身份，那是 proxy 的 session-init 交互�
 
 ## 持久化：别被配置管理器冲掉
 
-Windows 上常见的 provider 切换工具（如 cc-switch）在**切换 provider 时整份覆写** `~/.claude/settings.json` / `~/.codex/config.toml`。判定与做法：
+Windows 上常见的 provider 切换工具（如 cc-switch）会在切换 provider 时重写客户端配置，但两个客户端的重写方式并不相同：
 
-- 判定：手工加的配置在这类工具的 provider 快照或公共配置里**没有对应条目**时，切换即丢。
-- Claude Code：把 `hooks` 段写进它的**公共配置**（cc-switch 对应 `settings` 表的 `common_config_claude`），这样切换任意 provider 都会带上。
-- Codex：`~/.codex/hooks.json` 是独立文件，天然不受 `config.toml` 覆写影响；但写在 `config.toml` 里的 MCP 注册会丢，需要同等对待。
+- Claude Code：**整份覆写** `~/.claude/settings.json`。文件里不在这类工具的 provider 快照或公共配置中的内容，切换即丢。
+- Codex：对 `~/.codex/config.toml` 做 **TOML 键级合并**（parse → merge → serialize），只写公共配置与 provider 快照里的键，其余内容原样保留。判定依据：`common_config_codex` 的每个键在 `config.toml` 里都只出现一次、全文无重复表头，而 `instructions`、`status_line`、手工加的 `mcp_servers` 等仍在文件里。
+
+对应做法：
+
+- Claude Code 的 `hooks` 段必须写进公共配置（cc-switch 的 `settings` 表 `common_config_claude`），否则切换即丢。
+- Codex 的 `~/.codex/hooks.json` 是独立文件，不受 `config.toml` 重写影响；但写在 `config.toml` 里的 MCP 注册建议同样放进 `common_config_codex`，让它在每次切换后被写回。因为合并是键级的，追加一个尚不存在的表不会产生重复表。
 - 改这类工具的数据库前先退出应用进程，并备份数据库文件。
 
 ## 坑
 
-- **Windows 上的 shell 解析**：Claude Code 的 command hook 在 `args` 缺省时走 shell form，Windows 默认交给 Git Bash；本机 PATH 上的 `bash` 可能是 WSL 的，`.cmd` 包装会被静默吃掉。用 `args` 走 exec form（直接 spawn 可执行文件加参数）最稳。
+- **Windows 上的 shell 解析**：Claude Code 的 command hook 在 `args` 缺省时走 shell form，Windows 默认交给 Git Bash；本机 PATH 上的 `bash` 可能是 WSL 的，`.cmd` 包装会被静默吃掉。用 `args` 走 exec form（直接 spawn 可执行文件加参数）最稳。Codex 侧用 `.cmd` 包装实测可行，两端做法可以不同。
+- **Codex 的 hook 需要显式信任**：`config.toml` 的 `[hooks.state]` 为空即表示没有任何 hook 被信任，此时 hook 既不执行也不报错。判定方法：同一条命令分别带与不带 `--dangerously-bypass-hook-trust` 跑 `codex exec`，对比输出里有没有 `hook: <事件名>` 行，以及 rollout 里有没有注入块。
+- **信任记录的落点**：信任后 `config.toml` 会出现 `[hooks.state.'<hooks.json 路径>:<事件名>:<matcher 组序号>:<handler 序号>']`，每条带一个 `trusted_hash`。改动 `hooks.json` 会改变这个 hash，使已信任的 hook 重新回到待审状态，需要再信任一次；只改 hook 脚本内容不影响它。
 - **静默失效最难查**：hook 不执行时不会报错。验证时先挂一个并行探针 handler（把收到的 payload 写一行到固定文件），可立刻区分「hooks 段没被加载」与「单个 handler 有问题」。
 - **上层残留会互相打架**：公共配置里指向已卸载插件的 hooks 会持续报错，并长期占据事件段位，把新配置挤掉。
 - **注入体积**：skill 目录应按 query 匹配，不要每轮灌全量清单。
@@ -109,12 +116,17 @@ Windows 上常见的 provider 切换工具（如 cc-switch）在**切换 provide
 # 2. 归档：memory-core 日志应出现
 #    POST /v2/conversation/add status=200
 # 3. 耗时：召回加资产注入实测约 0.2s（本地 memory-core）
+
+# Codex 侧另需先确认 hook 真的在跑：
+codex exec --dangerously-bypass-hook-trust -s read-only "Reply with exactly one word: PING"
+#    期望输出出现 hook: UserPromptSubmit / hook: UserPromptSubmit Completed
+#    再在该会话的 rollout 里 grep <tdai_context>
 ```
 
-本机实测（2026-09-12）：注入块出现在新会话 transcript；归档 `status=200`、耗时 54ms；hook 端到端约 0.22s。
+本机实测（2026-09-12）：Claude Code 侧注入块出现在新会话 transcript，归档 `status=200`、耗时 54ms，hook 端到端约 0.22s。Codex 侧同日补齐资产注入：注入 2604 字符落在 developer message 的 `<tdai_context>` 块内，归档 `status=200`、耗时 20ms，端到端 0.22–0.27s。
 
 ## 边界
 
 - Hook 路径**没有**交互式 team/agent/task 选择：身份要么固定，要么自动取用户可见的第一个。
-- 本条目实测覆盖 Claude Code 侧；Codex 侧当时只做了记忆召回与归档，资产注入尚未补齐。
+- 本条目实测覆盖 Claude Code 与 Codex 两侧：Codex 侧资产注入已于同日用同一脚本结构补齐，差异仅在 transcript 格式、`SessionEnd` 超时上限与 skill 提示里的工具名。
 - proxy 的 `/skill-bridge/*`、`/memory-bridge/*` 不在 Hook 路径内，相关配方需要改写为原生端点。
