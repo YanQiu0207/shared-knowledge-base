@@ -14,6 +14,8 @@ AgentMemory 是一个面向 Coding Agent 的本地持久化记忆服务。它通
 
 在默认配置下，无需 API Key 即可运行 BM25 与本地嵌入检索；LLM 压缩与自动上下文注入需要显式启用，且会产生额外 Token 成本。
 
+本地嵌入可通过 `EMBEDDING_PROVIDER=local` 启用。AgentMemory v0.9.28 在该配置下使用 on-device 的 `all-MiniLM-L6-v2`，输出 384 维向量，不经过 Ollama 或远程 Embedding API。
+
 ## 特点
 
 - **跨客户端共享**：多个已接入的 Coding Agent 连接同一台本地服务时，可复用同一份记忆。
@@ -131,6 +133,16 @@ Windows 下让 Hook 进程拿到这些变量的两条路径：
 
 性能参考：首次加载模型约 70 s（一次性），暖推理约 2–3 s/次。
 
+## 本地 Embedding（Windows 实证）
+
+Embedding Provider 与用于摘要、压缩的 LLM Provider 相互独立。在 `~/.agentmemory/.env` 中配置：
+
+```ini
+EMBEDDING_PROVIDER=local
+```
+
+AgentMemory v0.9.28 此时使用本地 `all-MiniLM-L6-v2` 生成 384 维向量，无需 Ollama、远程 Embedding API 或对应的 API Key。修改配置后需重启 AgentMemory。
+
 ## 开机自启（Windows 实证）
 
 服务进程不随开机常驻，需配置自启。两种方式：
@@ -168,3 +180,4 @@ Windows 下让 Hook 进程拿到这些变量的两条路径：
 - [AgentMemory 官方 README](https://github.com/rohitg00/agentmemory)：安装、客户端插件、Windows 运行时与 Codex Desktop workaround。
 - 本机已验证：AgentMemory v0.9.28、`iii-engine` v0.11.2、Claude Code 与 Codex 插件安装，以及 `http://127.0.0.1:3111/agentmemory/health` 健康检查。
 - 本机实证补充：经源码 grep 确认 Hook 脚本只读 `process.env`、不读 `~/.agentmemory/.env`；不带 Bearer 调 `/agentmemory/health` 与 `/agentmemory/search` 均返回 401（loopback 也强制鉴权）；接入 OpenAI 兼容 LLM 后 `mem::summarize` 实际被调用并产出会话标题。
+- 本机配置实证：AgentMemory v0.9.28 的 `~/.agentmemory/.env` 使用 `EMBEDDING_PROVIDER=local`，配置说明标注模型为 `all-MiniLM-L6-v2`、向量维度为 384，且不经过 Ollama。
