@@ -1,0 +1,312 @@
+diff --git a/MemoryProxy/src/__tests__/codexHandler.test.ts b/MemoryProxy/src/__tests__/codexHandler.test.ts
+new file mode 100644
+index 0000000..e1168f6
+--- /dev/null
++++ b/MemoryProxy/src/__tests__/codexHandler.test.ts
+@@ -0,0 +1,82 @@
++import { describe, expect, it } from "vitest";
++
++import {
++  buildCodexModelsUpstreamUrl,
++  buildCodexUpstreamHeaders,
++  extractCodexMemoryUserKey,
++  resolveCodexUpstreamAuthorization,
++} from "../codex-auth.js";
++
++describe("extractCodexMemoryUserKey", () => {
++  it("prefers the dedicated Memory key over the upstream OAuth token", () => {
++    const headers = new Headers({
++      authorization: "Bearer oauth-token",
++      "x-tdai-user-key": "memory-user-key",
++      "x-api-key": "fallback-key",
++    });
++
++    expect(extractCodexMemoryUserKey(headers)).toBe("memory-user-key");
++  });
++
++  it("keeps Bearer authentication backward compatible", () => {
++    const headers = new Headers({ authorization: "Bearer memory-user-key" });
++
++    expect(extractCodexMemoryUserKey(headers)).toBe("memory-user-key");
++  });
++
++  it("falls back to x-api-key", () => {
++    const headers = new Headers({ "x-api-key": "memory-user-key" });
++
++    expect(extractCodexMemoryUserKey(headers)).toBe("memory-user-key");
++  });
++});
++
++describe("resolveCodexUpstreamAuthorization", () => {
++  it("preserves OAuth when a per-agent URL intentionally omits apiKey", () => {
++    expect(
++      resolveCodexUpstreamAuthorization("Bearer oauth-token", "global-key", undefined, true),
++    ).toBe("Bearer oauth-token");
++  });
++
++  it("uses a per-agent apiKey when provided", () => {
++    expect(
++      resolveCodexUpstreamAuthorization("Bearer oauth-token", "global-key", "agent-key", true),
++    ).toBe("Bearer agent-key");
++  });
++
++  it("uses the global apiKey without a per-agent override", () => {
++    expect(
++      resolveCodexUpstreamAuthorization("Bearer oauth-token", "global-key", undefined, false),
++    ).toBe("Bearer global-key");
++  });
++});
++
++describe("buildCodexModelsUpstreamUrl", () => {
++  it("targets the Codex catalog endpoint and preserves the client query", () => {
++    expect(
++      buildCodexModelsUpstreamUrl(
++        "https://chatgpt.com/backend-api/codex/",
++        "http://proxy/codex/default/v1/models?client_version=0.154.0",
++      ),
++    ).toBe("https://chatgpt.com/backend-api/codex/models?client_version=0.154.0");
++  });
++});
++
++describe("buildCodexUpstreamHeaders", () => {
++  it("keeps OAuth and strips the dedicated Memory credential", () => {
++    const headers = buildCodexUpstreamHeaders(
++      new Headers({
++        authorization: "Bearer oauth-token",
++        "x-tdai-user-key": "memory-user-key",
++        "user-agent": "codex-cli",
++      }),
++      "global-key",
++      undefined,
++      true,
++    );
++
++    expect(headers.authorization).toBe("Bearer oauth-token");
++    expect(headers["x-tdai-user-key"]).toBeUndefined();
++    expect(headers["user-agent"]).toBe("codex-cli");
++  });
++});
+diff --git a/MemoryProxy/src/codex-auth.ts b/MemoryProxy/src/codex-auth.ts
+new file mode 100644
+index 0000000..fef0016
+--- /dev/null
++++ b/MemoryProxy/src/codex-auth.ts
+@@ -0,0 +1,63 @@
++import { extractBearerToken } from "./opik.js";
++
++const SKIP_UPSTREAM_REQUEST_HEADERS = new Set([
++  "host",
++  "content-length",
++  "transfer-encoding",
++  "connection",
++  "x-tdai-user-key",
++]);
++
++/** Resolve Memory authentication without consuming the upstream OAuth token. */
++export function extractCodexMemoryUserKey(headers: Headers): string {
++  return headers.get("x-tdai-user-key")?.trim() ||
++    extractBearerToken(headers.get("authorization") ?? "") ||
++    headers.get("x-api-key") ||
++    "";
++}
++
++export function resolveCodexUpstreamAuthorization(
++  requestAuthorization: string | null,
++  globalApiKey: string,
++  agentApiKey: string | undefined,
++  hasAgentOverride: boolean,
++): string | null {
++  if (hasAgentOverride) {
++    return agentApiKey ? `Bearer ${agentApiKey}` : requestAuthorization;
++  }
++  return globalApiKey ? `Bearer ${globalApiKey}` : requestAuthorization;
++}
++
++export function buildCodexModelsUpstreamUrl(
++  upstreamBase: string,
++  requestUrl: string,
++): string {
++  const search = new URL(requestUrl).search;
++  return `${upstreamBase.replace(/\/+$/, "")}/models${search}`;
++}
++
++export function buildCodexUpstreamHeaders(
++  requestHeaders: Headers,
++  globalApiKey: string,
++  agentApiKey: string | undefined,
++  hasAgentOverride: boolean,
++): Record<string, string> {
++  const headers: Record<string, string> = {};
++  for (const [key, value] of requestHeaders.entries()) {
++    if (!SKIP_UPSTREAM_REQUEST_HEADERS.has(key.toLowerCase())) {
++      headers[key] = value;
++    }
++  }
++
++  const authorization = resolveCodexUpstreamAuthorization(
++    requestHeaders.get("authorization"),
++    globalApiKey,
++    agentApiKey,
++    hasAgentOverride,
++  );
++  if (authorization) {
++    headers.authorization = authorization;
++    delete headers["x-api-key"];
++  }
++  return headers;
++}
+diff --git a/MemoryProxy/src/codexHandler.ts b/MemoryProxy/src/codexHandler.ts
+index edca58b..bdddb42 100644
+--- a/MemoryProxy/src/codexHandler.ts
++++ b/MemoryProxy/src/codexHandler.ts
+@@ -32,6 +32,11 @@ import { createPipeline, writeLog } from "./logger.js";
+ import { extractSpaceIdFromPath } from "./credit-reporter.js";
+ import { joinUrl } from "./guard-adapter.js";
+ import { verifyUserKey } from "./auth.js";
++import {
++  buildCodexModelsUpstreamUrl,
++  buildCodexUpstreamHeaders,
++  extractCodexMemoryUserKey,
++} from "./codex-auth.js";
+ import { resolveModelId } from "./pricing.js";
+ import { codexAdapter } from "./agent-adapters/codex.js";
+ import {
+@@ -62,14 +67,6 @@ import {
+ 
+ // ── Constants ────────────────────────────────────────────────────────────────
+ 
+-const SKIP_REQUEST_HEADERS = new Set([
+-  "host",
+-  "content-length",
+-  "transfer-encoding",
+-  "connection",
+-  "x-tdai-user-key",
+-]);
+-
+ const SKIP_RESPONSE_HEADERS = new Set([
+   "content-encoding",
+   "transfer-encoding",
+@@ -241,19 +238,14 @@ export function injectCodexAssets(
+ function buildUpstreamHeaders(
+   c: Context,
+   config: ProxyConfig,
++  agentUpstreamEntry: ProxyConfig["upstream"]["agents"][string] | undefined,
+ ): Record<string, string> {
+-  const headers: Record<string, string> = {};
+-  for (const [k, v] of c.req.raw.headers.entries()) {
+-    if (!SKIP_REQUEST_HEADERS.has(k.toLowerCase())) {
+-      headers[k] = v;
+-    }
+-  }
+-  // Codex uses OpenAI protocol: inject Bearer token
+-  if (config.upstream.apiKey) {
+-    headers["authorization"] = `Bearer ${config.upstream.apiKey}`;
+-    delete headers["x-api-key"];
+-  }
+-  return headers;
++  return buildCodexUpstreamHeaders(
++    c.req.raw.headers,
++    config.upstream.apiKey,
++    agentUpstreamEntry?.apiKey,
++    agentUpstreamEntry !== undefined,
++  );
+ }
+ 
+ function filterResponseHeaders(source: Headers): Headers {
+@@ -266,6 +258,44 @@ function filterResponseHeaders(source: Headers): Headers {
+   return out;
+ }
+ 
++/** Transparently proxy Codex's startup model-catalog refresh. */
++export async function handleCodexModels(
++  c: Context,
++  config: ProxyConfig,
++): Promise<Response> {
++  const memoryUserKey = extractCodexMemoryUserKey(c.req.raw.headers);
++  const spaceId = extractSpaceIdFromPath(c.req.path) ?? "";
++  const { rejected, rejectReason } = await verifyUserKey(memoryUserKey, spaceId);
++  if (rejected) {
++    return c.json(
++      { error: `Authentication failed: ${rejectReason ?? "unknown"}` },
++      401,
++    );
++  }
++
++  const agentUpstreamEntry = config.upstream.agents?.["codex"];
++  const upstreamBase = agentUpstreamEntry?.url || config.upstream.url;
++  const upstreamUrl = buildCodexModelsUpstreamUrl(upstreamBase, c.req.url);
++  const upstreamHeaders = buildUpstreamHeaders(c, config, agentUpstreamEntry);
++
++  try {
++    const upstreamResp = await fetch(upstreamUrl, {
++      method: "GET",
++      headers: upstreamHeaders,
++    });
++    return new Response(upstreamResp.body, {
++      status: upstreamResp.status,
++      headers: filterResponseHeaders(upstreamResp.headers),
++    });
++  } catch (err: unknown) {
++    log.error("codex.models.forward_failed", {
++      upstreamUrl,
++      error: err instanceof Error ? err.message : String(err),
++    });
++    return c.json({ error: "Upstream request failed" }, 502);
++  }
++}
++
+ // ── Main handler ─────────────────────────────────────────────────────────────
+ 
+ /**
+@@ -284,10 +314,7 @@ export async function handleCodexEndpoint(
+   const path = c.req.path;
+ 
+   // ── 1. Auth ────────────────────────────────────────────────────────────────
+-  const apiKey =
+-    extractBearerToken(c.req.header("authorization") ?? c.req.header("Authorization") ?? "") ??
+-    c.req.header("x-api-key") ??
+-    "";
++  const apiKey = extractCodexMemoryUserKey(c.req.raw.headers);
+ 
+   const spaceId = extractSpaceIdFromPath(path) ?? "";
+   const { userId, rejected: userKeyRejected, rejectReason } =
+@@ -1102,16 +1129,8 @@ async function forwardToUpstream(
+   const agentUpstreamEntry = config.upstream.agents?.["codex"];
+   let upstreamBase = agentUpstreamEntry?.url || config.upstream.url;
+   let upstreamUrl = joinUrl(upstreamBase, c.req.path);
+-  const upstreamHeaders = buildUpstreamHeaders(c, config);
++  const upstreamHeaders = buildUpstreamHeaders(c, config, agentUpstreamEntry);
+   upstreamHeaders["content-type"] = "application/json";
+-  // 覆盖 apiKey 与 per-agent 策略一致：agentUpstreamEntry.apiKey 优先，
+-  // 否则透传客户端 Bearer。
+-  if (agentUpstreamEntry) {
+-    if (agentUpstreamEntry.apiKey) {
+-      upstreamHeaders["authorization"] = `Bearer ${agentUpstreamEntry.apiKey}`;
+-    }
+-    // else: 保留 c.req.header('authorization') 里的客户端 key 透传
+-  }
+ 
+   // ── Instance upstream config override (codex has no cost-guard routing) ──
+   {
+diff --git a/MemoryProxy/src/server.ts b/MemoryProxy/src/server.ts
+index cdc69aa..6314cca 100644
+--- a/MemoryProxy/src/server.ts
++++ b/MemoryProxy/src/server.ts
+@@ -5,7 +5,7 @@ import { handleChatCompletions } from "./handler.js";
+ import { handleAnthropicMessages } from "./anthropicHandler.js";
+ import { handleAuxiliaryEndpoint } from "./auxiliaryHandler.js";
+ import { handleDirectPassthrough } from "./directHandler.js";
+-import { handleCodexEndpoint } from "./codexHandler.js";
++import { handleCodexEndpoint, handleCodexModels } from "./codexHandler.js";
+ import { handleWorkbuddyEndpoint } from "./workbuddyHandler.js";
+ import { apiKeyToKeyId, extractBearerToken } from "./opik.js";
+ import { createSkillBridgeHandler } from "./skill/skill-bridge.js";
+@@ -225,6 +225,8 @@ export function createApp(config: ProxyConfig): Hono {
+   //   /codex/<spaceId>/v1/responses  ← codex 客户端 base 自带 v1 时命中
+   //   /codex/<spaceId>/responses     ← codex 客户端 base 不带 v1 时命中（对齐 CC/CB 用法）
+   // 两条路径全部映射到 handleCodexEndpoint，行为完全一致。
++  app.get("/codex/:spaceId/v1/models", (c) => handleCodexModels(c, config));
++  app.get("/codex/:spaceId/models", (c) => handleCodexModels(c, config));
+   app.post("/codex/:spaceId/v1/responses/compact", (c) => handleCodexEndpoint(c, config));
+   app.post("/codex/:spaceId/v1/memories/trace_summarize", (c) => handleCodexEndpoint(c, config));
+   app.post("/codex/:spaceId/v1/realtime/calls", (c) => handleCodexEndpoint(c, config));

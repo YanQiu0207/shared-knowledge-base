@@ -106,6 +106,116 @@ Proxy 已自动完成提示注入和会话归档时，原 TDAI Memory 的 `UserP
 
 Memory MCP 不与 Proxy 完全重复：Proxy 负责自动注入与记录，MCP 提供显式检索或写入工具。需要主动检索能力时可保留 MCP；不要把移除重复 Hook 等同于移除 MCP。
 
+## 跨机器快速复制
+
+下面的流程以 TencentDB Agent Memory 基线 `0468a2a5b50eaafc54758ed1e2e6609472e5b6ce` 为准。仓库版本不同应先执行 `git apply --check`，不要跳过兼容性检查。
+
+### 1. 应用 Codex OAuth Proxy 补丁
+
+可直接使用知识库保存的补丁：[Codex OAuth Proxy 补丁](../../sources/patches/tencentdb-agent-memory-codex-oauth-proxy.patch)。它包含以下已验证能力：
+
+- `Authorization` 保留 ChatGPT OAuth；
+- `x-tdai-user-key` 单独用于 Memory 鉴权，并在转发前剥离；
+- Claude Code 与 Codex 共用一个 Proxy 时，Codex 不继承全局 Anthropic API Key；
+- 透传 Codex 启动时的 `GET /models`，保留 `client_version` Query；
+- `/models` 同样验证 Memory User Key，匿名请求返回 HTTP 401。
+
+```powershell
+git apply --check E:/work/shared-knowledge-base/sources/patches/tencentdb-agent-memory-codex-oauth-proxy.patch
+git apply E:/work/shared-knowledge-base/sources/patches/tencentdb-agent-memory-codex-oauth-proxy.patch
+```
+
+补丁对应的本地提交为 `22ba97d`、`4890793`、`51264f5`。若这些提交已进入目标分支，不要重复应用补丁。
+
+### 2. 配置共享 Proxy
+
+```yaml
+upstream:
+  url: "https://open.bigmodel.cn/api/anthropic/v1"
+  apiKey: "<zhipu-api-key>"
+  agents:
+    codex:
+      url: "https://chatgpt.com/backend-api/codex"
+
+auth:
+  enabled: true
+
+sessionInit:
+  enabled: true
+
+injection:
+  enabled: true
+  externalGatewayUrl: "http://127.0.0.1:8097"
+  injectors:
+    - skill
+    - knowledge
+    - tdai-memory
+```
+
+`upstream.agents.codex.apiKey` 必须缺省；写入任何值都会替代 Codex 客户端 OAuth。`externalGatewayUrl` 必须是客户端可访问的地址，不能依赖 Docker 自动生成的 `172.*` 容器 IP。
+
+构建并启动：
+
+```powershell
+docker build -t tdai-memory-proxy:codex-oauth E:/github/TencentDB-Agent-Memory/MemoryProxy
+docker run -d --name tdai-proxy-shared `
+  --network tdai-memory-stack `
+  -p 8097:8096 `
+  --restart unless-stopped `
+  -v "E:/github/TencentDB-Agent-Memory/deploy/global-images/.proxy-config-shared/config.yaml:/data/config.yaml:ro" `
+  tdai-memory-proxy:codex-oauth
+```
+
+### 3. 配置 Claude Code
+
+`~/.claude/settings.json`：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8097/claude-code/default",
+    "ANTHROPIC_AUTH_TOKEN": "<memory-user-key>",
+    "ANTHROPIC_MODEL": "glm-5.3-flash"
+  }
+}
+```
+
+保留文件中的其他现有字段。写入后完全退出并重新启动 Claude Code，在新会话中关联 Team 与 Agent。
+
+### 4. 配置 Codex
+
+`~/.codex/config.toml`：
+
+```toml
+model_provider = "team-proxy"
+model = "gpt-5.6-sol"
+
+[model_providers.team-proxy]
+wire_api = "responses"
+base_url = "http://127.0.0.1:8097/codex/default/v1"
+requires_openai_auth = true
+
+[model_providers.team-proxy.http_headers]
+x-tdai-user-key = "<memory-user-key>"
+x-team-id = "<team-id>"
+x-agent-id = "<agent-id>"
+x-task-id = "no-task"
+```
+
+Codex 必须先通过 ChatGPT OAuth 登录。`requires_openai_auth = true` 让客户端把 OAuth 放进 `Authorization`；`http_headers` 中的 Memory User Key 供 Proxy 鉴权，两者不能互换。
+
+### 5. 最小验收清单
+
+1. 启动 Codex 时 `/models` 不再报 404。
+2. Codex `/responses` 返回 HTTP 200，日志中的上游为 `https://chatgpt.com/backend-api/codex/responses`。
+3. Proxy 日志显示 sessionInit 成功、`totalBlockCount=4`、`tdai-recorder:write-l0`。
+4. Claude Code 正常回答，Memory Bridge 地址使用 `127.0.0.1:8097`，`atomic/search` 返回 `code=0`。
+5. 未带 Memory User Key 请求 `/codex/default/v1/models` 时返回 HTTP 401。
+
+### 6. Hook 与 MCP 收尾
+
+确认 Proxy 自动注入和 L0 写入后，可解除旧 TDAI `UserPromptSubmit`、`SessionEnd` Hook 注册，避免重复注入与重复归档。先保留 Hook 文件和客户端配置备份。Memory MCP 提供显式检索能力，可按需保留。
+
 ## 客户端接入
 
 ### Claude Code
