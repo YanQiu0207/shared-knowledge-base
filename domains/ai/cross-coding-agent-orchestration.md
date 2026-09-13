@@ -1,7 +1,7 @@
 ---
 status: provisional
 source: OpenAI Codex and Anthropic Claude Code official documentation plus linked GitHub repositories
-source_version: 2026-07-22
+source_version: 2026-09-13
 applies_to: local coding-agent workflows that need native delegation or cross-product agent invocation
 excludes: hosted agent platforms without local CLI or MCP access and production use without independent security review
 ---
@@ -136,6 +136,61 @@ Codex
 
 稳定后再增加多轮会话、后台并行和代码写入。写入模式必须配合明确的写集、Git Worktree、机器验证和最终独立审查。
 
+## Windows 原生终端中的多轮协作
+
+当使用者希望在 VS Code 的 PowerShell 终端中继续运行现有 Claude Code、Codex 等 CLI，并需要 Agent 之间进行多轮提示、等待和复审时，应区分「完整编排器」与「终端自动化运行时」。
+
+### 代表性需求画像
+
+这类选型可用以下需求画像约束候选项目：
+
+1. 运行环境为 Windows，主要入口是 VS Code 内置 PowerShell 终端；不希望为了编排迁移到 WSL，也不希望重新配置 Windows 上已有的 Claude Code、Codex、Git、SSH、Skill、MCP 和认证环境。
+2. 必须运行现有的真实 Coding Agent CLI，而不是绕过 CLI、直接用 API 重新实现 Agent；至少支持 Claude Code 和 Codex。
+3. 使用者可以像普通终端一样查看、切换和直接介入每个 Agent，会话最好能够持久化和恢复。
+4. Agent 之间需要多轮协作，而不只是一次性执行命令。代表性链路是：Codex 生成方案，Claude 审核，Codex 修改，Claude 复审并实现，Codex 审核代码，Claude 修复，Codex 最终确认。
+5. 需要将 Agent 启动、发送 Prompt、等待、继续同一会话、读取结果和处理阻塞暴露为可由 Agent 或脚本调用的自动化接口。
+6. 当前只希望外置使用工具，不修改现有项目框架的代码；接入成本应较低，不能为了试验先建设常驻服务、复杂 Web 平台或大规模 Swarm。
+7. 长期可能把项目框架演进为管理其他 Agent 的 Orchestrator，但只有在出现并行任务、Worktree 隔离、依赖调度、消息路由、失败恢复、权限控制和统一 Review 等实际需求后才实施。
+8. 交接不能只依赖截取终端文本。方案、Findings、Diff Review 和最终 Verdict 应保存为可验证 Artifact，并结合测试、Lint、Build 等机器证据判断是否完成。
+
+候选项目应明确报告以下差距：是否原生支持 Windows PowerShell，是否要求 WSL、`tmux` 或容器，是否复用现有 CLI 配置，是否具备持久多轮会话与 Agent 间消息，是否只提供 GUI，以及实现完整审核闭环需要多少额外脚本或配置。
+
+### CAO 与 Herdr 的边界
+
+[`awslabs/cli-agent-orchestrator`](https://github.com/awslabs/cli-agent-orchestrator) 提供 `handoff`、`assign`、`send_message`、Inbox、Callback、Agent Profile 和定时 Flow，是完整的 Supervisor-Worker 编排器；但其官方安装要求包含 `tmux 3.3+`，不属于 Windows 原生 PowerShell 工作流。通过 PowerShell 调用 `wsl.exe` 只能把入口放在 Windows，Agent、`tmux`、配置路径和运行环境仍位于 WSL 内。
+
+[`herdrdev/herdr`](https://github.com/herdrdev/herdr) 是较底层的 Agent 终端运行时。官方 Windows 文档确认它原生使用 ConPTY，支持 PowerShell、本地持久会话、Pane、Agent 命令发现、Git/Worktree 检测，以及 Claude Code、Codex 等 Agent Integration。它直接运行当前 Windows `PATH` 中已有的 CLI，因此通常不需要把 Windows CLI 配置迁移到 WSL。
+
+Herdr 提供三层自动化原语：
+
+1. Layout：创建 Workspace、Tab 和 Pane。
+2. Pane：运行普通命令、发送输入、读取输出和等待文本。
+3. Agent：启动已识别 Agent、发送 Prompt、等待生命周期状态和读取结果。
+
+Herdr 可以实现「Codex 生成方案 → Claude 审核 → Codex 修改 → Claude 复审 → Claude 实现 → Codex 审核 → Claude 修复 → Codex 确认」，但这不是内置工作流。Supervisor Prompt 或外部脚本需要组合 `agent start`、`agent prompt --wait`、`agent wait` 和 `agent read`，自行定义角色、超时、结果格式和失败处理。
+
+### 可靠交接约束
+
+Herdr 的 `agent prompt --wait` 等待生命周期状态，不跟踪独立对话轮次；`idle` 或 `done` 只表示 Agent 可以继续接收输入，不能单独证明任务成功。终端读取也可能拿不到完整的全屏 Agent 历史。官方建议在完整响应不可用时，让 Agent 把结果写入 Markdown 文件并只回复文件路径。
+
+因此，多轮协作应使用持久 Artifact 作为交接凭证：
+
+```text
+Agent 返回 idle/done
+    + 目标 Artifact 存在且格式有效
+    + 必要验证命令通过
+    = 本轮工作完成
+```
+
+Review Artifact 至少应记录 Verdict、Findings、文件与行号、证据、严重级别、建议和残余风险。Agent 生命周期状态只用于调度，不替代测试、代码证据或验收结论。
+
+### 选型原则
+
+- 只有两个或少量 CLI 进行交叉审核时，优先使用非交互 CLI、Skill 或 Herdr，不先建设完整 Orchestrator。
+- 需要 Windows 原生 PowerShell、持久 Pane、Agent 相互提示和人工随时介入时，Herdr 比依赖 `tmux` 的 CAO 更直接。
+- 需要正式的 Handoff、异步 Callback、Inbox、权限 Profile、Fleet 管理和定时 Flow 时，完整 Orchestrator 才有足够收益。
+- Agent 数量增长后，Orchestrator 主要解决人工调度瓶颈、工作区冲突、状态不可见、结果路由、无人值守恢复和团队治理；这些问题尚未出现时，不应只因架构先进而提前引入。
+
 ## 安全和运行约束
 
 - 只读任务默认禁止写文件、安装依赖和修改 Git 状态。
@@ -156,5 +211,9 @@ Codex
 - [Codex CLI Reference](https://developers.openai.com/codex/cli/reference)
 - [claude-in-codex](https://github.com/briandconnelly/claude-in-codex)
 - [Connect Claude Code to tools via MCP](https://code.claude.com/docs/en/mcp)
+- [CLI Agent Orchestrator 中文 README](https://github.com/awslabs/cli-agent-orchestrator/blob/main/README.zh-CN.md)
+- [Herdr Agent Automation](https://herdr.dev/docs/agent-automation/)
+- [Herdr Integrations](https://herdr.dev/docs/integrations/)
+- [Herdr Windows Support](https://herdr.dev/docs/windows-beta/)
 
 本条目的证据等级为 `provisional`：官方文档能证明原生子 Agent、非交互 CLI 和 MCP 接入能力；`claude-in-codex` 的 Codex → Claude 桥接方式、权限边界、费用和 Windows 兼容性仍需在实际环境中独立验证。
