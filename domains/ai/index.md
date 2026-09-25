@@ -15,6 +15,7 @@
 - [codex-plugin-cc：Claude Code 内调用 Codex 的官方插件](codex-plugin-cc-commands.md) — `/codex:` 七命令与高频参数，`--base`/`--background` 最常用
 - [Agent 优先编码的轻量 Harness 演进](agent-first-lightweight-harness.md) — 原生 Agent 优先，编排按风险启用
 - [Agent Harness 的分层评测：能力、路由与交付证据](agent-harness-evaluation-stack.md) — 分离公开修复能力、路由安全和交付声明
+- [agmsg：Claude Code 与 Codex CLI 的本机通信](agmsg-claude-code-codex-communication.md) — 区分消息入库、Codex Monitor 桥接和 thread 身份绑定
 
 ## 相关踩坑
 
