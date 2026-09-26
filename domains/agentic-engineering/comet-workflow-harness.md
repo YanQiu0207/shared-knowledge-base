@@ -1,10 +1,10 @@
 ---
 scope: cross-project
 status: provisional
-source: first-hand README analysis of github.com/rpamis/comet (master branch, ~3.1k stars, MIT, v0.4.0, latest commit 899d1fb05cd4 2026-09-22)
-source_version: 2026-09-24
-applies_to: 选型或借鉴「AI 编码流程编排状态机 / 阶段门禁 / 可恢复任务 / Skill 评测闭环」时参考；长任务跨会话接续、多 Agent worktree 并行、以机器门禁替代口头断言的场景
-excludes: 未逐行读源码，机制均为 README 自述；评测数字为项目方自报未独立复现；未做本地安装验证；pre-1.0 API 可能变动
+source: first-hand README + bundled SKILL.md + comet-resume-probe source verification of github.com/rpamis/comet (master branch, ~3.1k stars, MIT, v0.4.0, latest commit 899d1fb05cd4 2026-09-22)
+source_version: 2026-09-28
+applies_to: 选型或借鉴「AI 编码流程编排状态机 / 阶段门禁 / 可恢复任务 / Skill 评测闭环 / 工作流扩展模型」时参考；长任务跨会话接续、多 Agent worktree 并行、以机器门禁替代口头断言的场景
+excludes: 打包分发脚本（esbuild 产物）内部校验逻辑未逐行反读，门禁细节依随包 SKILL.md 与 resume-probe 可读源码；未做本地安装与端到端实测；/comet-any 扩展管线未实跑；评测数字为项目方自报未独立复现；pre-1.0 API 可能变动
 ---
 
 # Comet：AI 编码的流程编排状态机（Native/Classic 双工作流）
@@ -36,13 +36,25 @@ README 明确：*"Native and Classic are not lightweight and heavyweight tiers, 
 
 推断（README 未明说）：Classic 是原有产品（0.3.9），Native 为 0.4.0 新增运行时；保留 Classic 客观上留住了既有 OpenSpec + Superpowers 用户，但全文无 migration 字样。
 
-## 机制要点（README 自述）
+## 机制要点（SKILL.md + resume-probe 源码确认）
 
-- **可恢复**：每个 change 的 `.comet.yaml` 记录阶段、执行模式、验证结果、归档状态；`comet resume-probe` 续跑。
-- **门禁靠脚本不靠口头**：Hook 默认禁止写路径（`hook.allow_paths` 为空），`.comet` 与工作流产物不可绕过保护；文档同步由脚本接管，替代「记得更新设计文档」式提醒。
-- **Supervisor Changes**：复杂需求拆子变更 DAG，多 Agent 在隔离 worktree 独立实现验证，按依赖序集成后父变更最终 Verify。
-- **运行时**：纯 Node.js（Windows/macOS/Linux，无需 Bash/WSL）；产物人读部分在 `docs/comet/`，机器状态在 `.comet/runtime/`。
-- **评测闭环**：`comet eval` 用 Rubric + Pass@k + Pass^k 驱动 Skill 演进，可接 LangSmith/LangFuse。
+**可恢复的实现**（comet-resume-probe.mjs 可读源码核验）：
+- 状态外置：每个 change 的 `.comet.yaml` 记 `workflow`、`phase`、`verifyResult`、`buildPause`、`archived`；逐字段校验，未知字段直接判 invalid state；归档区目录名 `YYYY-MM-DD-<name>` 解析回 change 名，「已归档但交付未完成」会捞回待恢复列表。
+- 恢复判定是四选一确定性分类器（非 LLM 自由发挥）：输入 `{utterance, agent_context}` → 输出 `auto_resume | ask_user | out_of_scope | none` + confidence + reason + evidence。素材三路：磁盘状态（phase→命令硬编码映射）、`git status --short`（有脏文件一律 ask_user：「uncommitted worktree changes require attribution」）、话语关键词表（恢复词「继续/接着/恢复/跑完/提交/验证/归档/修刚才」；疑问词「是什么/为什么/explain」→ out_of_scope；拒绝词「不要恢复/skip comet」→ 退出）。
+- 策略偏保守：多 active change、决策点（buildPause、verify fail）一律 ask_user；SKILL.md 规定只有 `auto_resume` 才自动进入。
+
+**门禁的实现**（SKILL.md 确认；guard 脚本为 esbuild 打包产物，内部未逐行反读）：
+- 门禁点在 phase 推进：过脚本校验（任务完成、状态字段齐、验证证据在）才写 state、返回下一条 `continuation`；Native 版 Agent 「works only on the phase specified by Runtime」。
+- 口头越级三重堵死：SKILL.md 明文对话不得授权改 phase；`.comet` 目录 Hook 保护不可豁免；坏 state 报错不猜（「Report malformed state rather than guessing a phase」）。
+- 并发安全：Native 命令带 `--expected-state-version` / `--expected-action` 乐观锁，多 Agent 同改一个 change 时旧版本号命令被拒。
+
+**评测闭环**（eval/README.md 确认）：pytest + Rubric（通用 7 维/工作流 9 维//comet-any 生成包 11 维）+ LLM-as-judge（Judge 用独立模型独立凭据 `BENCH_JUDGE_*`，不继承主任务配置）；被测 Agent 跑在 Docker 镜像（预装 Claude Code/Codex/Qoder/CodeBuddy），可接 LangSmith/LangFuse 存 trace。**是评测驱动的人工迭代，非自进化**——仓库无「eval 结果自动回写 Skill」闭环。
+
+**扩展模型**（comet-any/SKILL.md + ARCHITECTURE.md 确认）：三层扩展面，编译为 `workflow-protocol.json`（runtime source of truth，Factory/Eval/review/readiness 共用）：
+1. Required Skill Call（最轻）：节点绑「必调依赖」，如 execute 必调 elementui、review 必调 whitebox-code-standard；
+2. Overlay（覆写 Classic）：`comet-five-phase-overlay` 保五阶段控制流与 `.comet.yaml` 语义；节点分权——control 节点（open/execute/verify/archive）不可覆写，producer 节点（design/plan）可覆但须满足原 Output Schema，handoff/guardrail 可增强；
+3. Workflow Kernel（完全自定义）：自建状态模型 + Output Schema + Guardrail，Native 本身即 kernel 成品示范。
+扩展物也过门禁：每个绑定/Schema 标强制级别（guarded/handoff-guarded/evidence-only/advisory）；「failed eval, skipped eval, or stale-hash evidence cannot become ready」；publish 须人工批准、install 先 preview 确认零写入。Hook 侧 `hook.allow_paths` 默认空，扩展需写共享文件时加项目相对目录，`.comet` 永不可豁免。
 
 ## 安装与使用（README 自述）
 
