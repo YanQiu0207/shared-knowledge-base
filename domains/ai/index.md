@@ -16,6 +16,7 @@
 - [Agent 优先编码的轻量 Harness 演进](agent-first-lightweight-harness.md) — 原生 Agent 优先，编排按风险启用
 - [Agent Harness 的分层评测：能力、路由与交付证据](agent-harness-evaluation-stack.md) — 分离公开修复能力、路由安全和交付声明
 - [agmsg：Claude Code 与 Codex CLI 的本机通信](agmsg-claude-code-codex-communication.md) — 区分消息入库、Codex Monitor 桥接和 thread 身份绑定
+- [WeKnora：腾讯开源企业知识平台](weknora-tencent-knowledge-platform.md) — RAG + Agent + Wiki 三合一；转 Markdown 是入库中间产物，纯转换用底层 AnyDoc；MCP Server 可接 Claude Code
 
 ## 相关踩坑
 
