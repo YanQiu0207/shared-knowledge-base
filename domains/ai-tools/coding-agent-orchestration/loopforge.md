@@ -3,7 +3,7 @@ status: verified
 source: Tencent/LoopForge 官方 README 与 Local 使用指南；三次 Claude Code headless 实测
 source_version: 实测于 2026-11-15；仓库 main 分支当日版本
 applies_to: 个人开发者试用 Local 版、评估同类编排工具、向团队推广平台版之前的判断依据
-excludes: 平台版团队部署的实测（未做）；官方宣称的腾讯内部使用数据（无法核实）；Windows 原生运行平台版
+excludes: 平台版团队部署的实测（未做）；Codex 宿主的实跑（仅 plan 预览）；官方宣称的腾讯内部使用数据（无法核实）；Windows 原生运行平台版
 ---
 
 # Tencent LoopForge
@@ -33,6 +33,19 @@ LoopForge 是腾讯轻量云团队开源的 MIT 平台，自己不写代码，�
 - **人工关口是软的**：headless 模式下对流程说「预先批准」即可直接放行；拦截能力依赖使用者不授权。
 - **状态文件可被事后手改**：solo 报告里的结束事件名写错（`SOLO_completed` vs `workflow_completed`）由主线程手动修正 JSON，没有程序校验。
 - **文件名不一致**：协议要求读 `.claude/rules/global.mdc`，实际安装为 `global.md`（未观察到运行时故障）。
+
+## Codex 接入（仅 `plan` 预览，未实跑）
+
+官方支持 Codex：`npx -y loopforge-cli@latest install codex` 安装 Classic 版，入口 `$devflow-codex "<需求>"`，恢复 `$devflow-codex resume {task_slug}`；Portable 版为 `skills install codex`，入口 `$devflow "<需求>"`。
+
+`plan codex` 显示写入 52 个文件（Claude 版 85 个），与 Claude 版的差异：
+
+- 工作流本体在 `.codex/`：角色 agent 用 TOML 定义（`devflow-architect.toml` 等），角色规则为 `.mdc` 后缀。
+- Skill 同时写入 `.codex/skills/` 与 `.agents/skills/`（`devflow-codex`、`knowledge-distillation`、brainstorming）。
+- 不含 `agent-observability` 观测脚本，本地可观测看板不适用于 Codex。
+- 角色分工、SOLO / 完整流程分流与 `artifacts/{task_slug}/` 产物结构与 Claude 版一致（依据官方文档，未实跑验证）。
+
+同一项目可同时装 Claude 版与 Codex 版（目录不重叠）；同一宿主只能启用一种 Edition。**已有 `.agents/skills/` 被其他工作流占用的仓库不要装 Codex 版**，以免技能混杂。
 
 ## 平台版要点（未实测）
 

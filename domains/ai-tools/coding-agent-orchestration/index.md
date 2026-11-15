@@ -8,4 +8,4 @@
 
 | 条目 | 内容 | 入口 |
 | --- | --- | --- |
-| Tencent LoopForge | 自部署团队工作台 + 注入编程助手的 Local 版；SOLO 与完整流水线实测记录 | [loopforge.md](loopforge.md) |
+| Tencent LoopForge | 自部署团队工作台 + 注入编程助手的 Local 版；SOLO 与完整流水线实测记录；Codex 接入差异 | [loopforge.md](loopforge.md) |
