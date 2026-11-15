@@ -3,8 +3,8 @@ scope: cross-project
 status: verified
 source: causal-memory 官方 README、integrations/claude-code 与 integrations/codex 安装脚本、skills/causal-memory/SKILL.md；本机安装与端到端实测
 source_version: causal-memory 0.10.0（PyPI win_amd64 wheel）；Codex CLI 0.169.0；验证日期 2026-11-15
-applies_to: 在 Windows 上让 Claude Code 与 Codex 共用一个 causal-memory 记忆库，并按需接入 OpenAI 兼容的 LLM
-excludes: macOS／Linux 安装细节、HTTP 多租户部署、本地向量模型（需源码编译 local-embed 特性）、评测数据复核
+applies_to: 在 Windows 上让 Claude Code 与 Codex 共用一个 causal-memory 记忆库，按需接入 OpenAI 兼容的 LLM，并用本地 Ollama 提供向量检索
+excludes: macOS／Linux 安装细节、HTTP 多租户部署、源码编译 local-embed 特性、评测数据复核
 ---
 
 # causal-memory：安装、配置与使用（Claude Code + Codex 共享）
@@ -52,9 +52,33 @@ causal-memory setconfig \
 causal-memory getconfig              # 密钥会被遮蔽显示
 ```
 
-- `CAUSAL_MEMORY_LLM_API` 填 OpenAI 兼容的 base URL。向量检索另用 `CAUSAL_MEMORY_EMBED_API/KEY/MODEL`；DeepSeek 不提供 embedding 接口，不配时只用 BM25。
+- `CAUSAL_MEMORY_LLM_API` 填 OpenAI 兼容的 base URL。
 - 用到 LLM 的是 `distill`、`judge`、`reasoning`、`resolve-updates` 等命令，以及 `remember`、`resolve_updates` 等工具；`record_decision`、`search_memory`、`intervention_query` 不依赖 LLM。
 - 验证 LLM 是否接通：对一个临时库执行 `causal-memory distill <session.json> --dry-run`。输入须含 `date` 字段和 `turns` 数组，否则只报格式警告、不会发出请求。
+
+## 配置向量检索（本地 Ollama + bge-m3）
+
+不配 embedding 时只有 BM25；`stats` 中 `edge embeddings: 0`，检索结果前缀为 `[bm25]`。DeepSeek API 只提供对话模型（`/models` 仅返回对话模型，`/embeddings` 返回 404），不能用作 embedding 来源。未配 embedding 时执行 `causal-memory embed` 也会报 404，推测是退回请求了 LLM 地址。
+
+```bash
+ollama pull bge-m3                   # 多语言模型，约 1.2 GB，输出 1024 维
+causal-memory setconfig \
+    CAUSAL_MEMORY_EMBED_API=http://127.0.0.1:11434/v1 \
+    CAUSAL_MEMORY_EMBED_KEY=ollama \
+    CAUSAL_MEMORY_EMBED_MODEL=bge-m3
+causal-memory embed                  # 为已有记录补算向量
+causal-memory stats                  # edge embeddings 应等于 causal edges
+```
+
+- 配置后新写入的记录会自动计算向量。首次调用要冷加载模型，耗时较长。
+- 用措辞不同的中文查询（如「绕过提交前检查直接发布代码」）能召回「git push 时加 --no-verify 跳过钩子」这条教训。
+
+**Clash fake-ip 下 `ollama pull` 卡住**：进度一直为 0，`%LOCALAPPDATA%\Ollama\server.log` 反复报 `redirect target not allowed: <host>.r2.cloudflarestorage.com resolves to non-public 198.18.x.x`。原因是 fake-ip 模式把下载域名解析到 `198.18.0.0/16` 保留网段，Ollama 拒绝跟随指向非公网地址的重定向。解决方法：另起一个走 HTTP 代理的临时 Ollama 实例拉取，模型目录与主实例共用，拉完结束该实例即可，不改主实例配置：
+
+```bash
+OLLAMA_HOST=127.0.0.1:11435 HTTPS_PROXY=http://127.0.0.1:<clash-mixed-port> NO_PROXY=127.0.0.1,localhost ollama serve
+OLLAMA_HOST=127.0.0.1:11435 ollama pull bge-m3
+```
 
 ## 使用规则
 
@@ -80,5 +104,5 @@ causal-memory getconfig              # 密钥会被遮蔽显示
 
 - 新注册的 MCP 要在客户端重启后才会出现在当前会话里。
 - 没有自动召回，是否查询取决于 Agent 是否遵守规则；需要时可加 PreToolUse hook，在 Bash 命令前调用 `intervention_query`。
-- 只用 BM25 时的中文检索效果尚待更多样本验证。
+- 向量检索依赖本机 Ollama 在运行；Ollama 未启动时检索质量会下降，降级行为未验证。
 - 项目处于 alpha 阶段，README 中工具数量、测试数量有前后不一致之处，评测为项目方自报。
