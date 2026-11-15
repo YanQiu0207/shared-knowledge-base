@@ -73,7 +73,7 @@ causal-memory stats                  # edge embeddings 应等于 causal edges
 - 配置后新写入的记录会自动计算向量。首次调用要冷加载模型，耗时较长。
 - 用措辞不同的中文查询（如「绕过提交前检查直接发布代码」）能召回「git push 时加 --no-verify 跳过钩子」这条教训。
 
-**Clash fake-ip 下 `ollama pull` 卡住**：进度一直为 0，`%LOCALAPPDATA%\Ollama\server.log` 反复报 `redirect target not allowed: <host>.r2.cloudflarestorage.com resolves to non-public 198.18.x.x`。原因是 fake-ip 模式把下载域名解析到 `198.18.0.0/16` 保留网段，Ollama 拒绝跟随指向非公网地址的重定向。解决方法：另起一个走 HTTP 代理的临时 Ollama 实例拉取，模型目录与主实例共用，拉完结束该实例即可，不改主实例配置：
+**Clash fake-ip 下 `ollama pull` 卡住**（详见 [踩坑条目](../../../issues/ollama-pull-clash-fake-ip-non-public-redirect.md)）：进度一直为 0，`%LOCALAPPDATA%\Ollama\server.log` 反复报 `redirect target not allowed: <host>.r2.cloudflarestorage.com resolves to non-public 198.18.x.x`。原因是 fake-ip 模式把下载域名解析到 `198.18.0.0/16` 保留网段，Ollama 拒绝跟随指向非公网地址的重定向。解决方法：另起一个走 HTTP 代理的临时 Ollama 实例拉取，模型目录与主实例共用，拉完结束该实例即可，不改主实例配置：
 
 ```bash
 OLLAMA_HOST=127.0.0.1:11435 HTTPS_PROXY=http://127.0.0.1:<clash-mixed-port> NO_PROXY=127.0.0.1,localhost ollama serve

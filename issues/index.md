@@ -19,3 +19,4 @@
 - [concord 在 Windows 误判 Codex 版本](concord-codex-win-adapter.md) — spawnSync 裸调 npm .cmd 垫片报 EINVAL（`undefinedundefined` 信号）；Codex daemon 仅认 standalone 安装
 - [Windows Codex managed daemon 弹出控制台窗口](codex-windows-managed-daemon-console-windows.md) — 区分常驻 runtime／MCP 窗口与逐轮工具窗口；`--no-daemon` 可用于 CLI 对照与临时绕过
 - [Devin 代理下 Opus 遇到 ScheduleWakeup 返回 400](devin-proxy-opus-schedule-wakeup-invalid-argument.md) — 禁用该工具后本次 Opus 文本请求成功；底层拒绝规则未确认
+- [Clash fake-ip 下 ollama pull 卡住](ollama-pull-clash-fake-ip-non-public-redirect.md) — `ollama pull` 进度为 0、报 `redirect target not allowed ... non-public 198.18`；用走代理的临时实例拉取
