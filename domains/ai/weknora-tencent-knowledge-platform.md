@@ -41,3 +41,15 @@ excludes: 微信对话开放平台在线版的计费与配额细节、生产集�
 ## 相关条目
 
 - 试用后若确认 MCP Server 接 Claude Code / Codex 的接线细节，另建条目并在此互链。
+
+## 2026-11-15 补充核实：纯转换的最小选型
+
+本节依据当日官方 README 和解析文档，不覆盖上文历史版本快照。上文「2025-08 开源」的首次公开日期在本轮未独立核实，不作为近期首次开源的判断证据。
+
+- **Excel、Word、PPT 和文本型 PDF**：若只需 Markdown，可直接使用 [Firecrawl AnyDoc](https://github.com/firecrawl/anydoc)，不用部署 WeKnora。AnyDoc 不是腾讯项目。
+- **图片、扫描件**：AnyDoc 本地核心不做 OCR。它可选择将需 OCR 的整份文档上传 Firecrawl Parse；这不是纯本地转换。腾讯的 [WeVisDoc](https://github.com/Tencent/WeVisDoc) 明确支持文档页面图像转结构化 Markdown，含 LaTeX 公式与 HTML 表格；另有 [HunyuanOCR](https://github.com/Tencent-Hunyuan/HunyuanOCR) 文档解析模型。
+- **网页 URL、HTML / MHTML**：WeKnora 的[官方解析文档](https://github.com/Tencent/WeKnora/blob/main/website-docs/03-features/03-document-parsing.md)列明支持；不能据此推断 AnyDoc 同样支持。AnyDoc 当日支持列表未列网页或 HTML，需要另配网页提取工具。
+- **图片保留**：AnyDoc 的 Markdown 默认用嵌入图片的替代文本表示图片，原始图片字节留在 document model；不能承诺一次转换自动得到完整的 Markdown + 本地图片目录。
+- **知识平台需求**：需要检索、Agent 或 Wiki 时再考虑 WeKnora。其 docreader 会返回 Markdown 与图片引用，但纯转换不是整个平台的核心定位。
+
+官方调用示例：`npx @firecrawl/anydoc report.xlsx -o report.md`。本轮仅核读官方文档，未在 Windows 上安装或转换样例；复杂表格、公式和图表的保真度需用真实文件验证。

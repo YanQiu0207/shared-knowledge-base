@@ -16,7 +16,13 @@
 - [Agent 优先编码的轻量 Harness 演进](agent-first-lightweight-harness.md) — 原生 Agent 优先，编排按风险启用
 - [Agent Harness 的分层评测：能力、路由与交付证据](agent-harness-evaluation-stack.md) — 分离公开修复能力、路由安全和交付声明
 - [agmsg：Claude Code 与 Codex CLI 的本机通信](agmsg-claude-code-codex-communication.md) — 区分消息入库、Codex Monitor 桥接和 thread 身份绑定
-- [WeKnora：腾讯开源企业知识平台](weknora-tencent-knowledge-platform.md) — RAG + Agent + Wiki 三合一；转 Markdown 是入库中间产物，纯转换用底层 AnyDoc；MCP Server 可接 Claude Code
+- [WeKnora：腾讯开源企业知识平台](weknora-tencent-knowledge-platform.md) — RAG + Agent + Wiki 三合一；Office 转换可直接用 AnyDoc，图片和网页需其他解析能力
+- [腾讯 AI 开源项目发现与选型](tencent-ai-open-source-landscape.md) — 覆盖主组织、混元、ARC、腾讯云及微信视觉；区分新建仓库与版本更新
+- [Agent 框架的记忆/上下文/自进化组件选型](agent-framework-memory-context-components.md) — LangChain 1.x 官方 middleware/store/LangMem 可加装，先盘点框架组件再考虑换框架；六项全中的开箱框架只有 Claude Agent SDK（绑定 Anthropic 兼容 API）
+- [Devin 账号模型接入 Claude Code：代理、认证与 Windows 启动](devin-account-model-proxy-claude-code.md) — 区分 PAT、服务用户密钥与模型会话；模型发现和登录启动须实测
+- [本地 LLM 代理出网面审计：方法与 devin-2api 实例](local-llm-proxy-egress-audit.md) — 清点硬编码 URL/客户端构造点/后台出网/死存根四层；devin-2api 实测无隐蔽上传
+
+- [浏览器工具说明与对比](../ai-tools/browser/index.md) — BrowserSkill、Tabbit CLI、Playwright 的浏览器限制、分层关系与开发选型
 
 ## 相关踩坑
 

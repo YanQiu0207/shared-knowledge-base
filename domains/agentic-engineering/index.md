@@ -16,3 +16,4 @@
 - [多 Agent 协作工程协议设计（AWS sample-codex-agent-team 样例）](multi-agent-collaboration-protocol.md)
 - [Omnigent：编排多编码 Agent 的 meta-harness](omnigent-meta-harness.md) — 在现成 agent CLI 之上统一编排：多 agent 混编、跨设备接力、云沙箱、治理策略；Windows 需 WSL 全功能
 - [Comet：AI 编码的流程编排状态机](comet-workflow-harness.md) — Native/Classic 双工作流按模型能力选：强模型走 Native 免门禁开销，门禁靠脚本不靠口头，任务可恢复可评测
+- [Matt Pocock Skills：小而组合的 AI 编码工作流技能集](mattpocock-skills-workflow.md) — 反全家桶的轻路线：user/model 双层调用模型、显式 Skill tool 调用图、主流程+三汇入点，双宿主（Claude Code + Codex）行为一致

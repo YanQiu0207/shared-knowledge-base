@@ -1,7 +1,7 @@
 ---
 status: verified-with-limits
-source: 本地进程与窗口观察、Codex CLI --help、用户重启后观察；openai/codex Issue #46949、#48029
-source_version: 2026-09-25
+source: 本地进程与窗口观察、Codex CLI --help、用户重启后观察；openai/codex Issue #46949、#48029；2026-09-27 默认终端对照实验
+source_version: 2026-09-27
 applies_to: Windows 上 Codex 使用共享 managed app-server daemon，且启动本地工具、内置 runtime 或 stdio MCP 子进程的场景
 excludes: 所有 MCP 启动都必定弹窗、所有 Codex 运行方式、上游代码根因已经得到本机验证、无 daemon 模式保留共享会话能力
 ---
@@ -20,6 +20,8 @@ Windows 上出现多个持续可见的控制台窗口时，先检查它们是否
 - 本地窗口与进程检查曾观察到 `node_repl.exe`、`node.exe`、`cmd.exe` 等持续窗口，并看到工具调用时新建的 `pwsh.exe` 可见窗口。会话启动时的 MCP 窗口和逐轮工具窗口应分开定位。
 - 本地 `codex --help` 将 `--no-daemon` 描述为「即使共享后台服务已运行，也不使用它」。重启后的无黑框现象是用户观察，未对 Desktop App、所有 MCP 和长期运行做完整回归。
 - [openai/codex #48029](https://github.com/openai/codex/issues/48029)单独分析每轮开始的 Git 检查短暂弹窗，指向 Windows 子进程创建标志；它不能直接证明 #46949 所有常驻窗口共用同一代码缺陷。
+- 2026-09-27，在 `E:\github\matt-pocock` 的 VS Code 集成终端运行 `mycodex.ps1`：默认终端设为 Windows Console Host 时，65 秒内未见额外窗口；恢复 Windows Terminal 后，同样的启动出现 2 个新增 Windows Terminal 进程和 4 个短暂窗口。两轮都未复现 `0x800700e8`，因此只能确认默认终端设置影响了额外窗口，不能认定它是管道错误的根因。
+- 报错中的 `git -c safe.bareRepository=explicit config --null --get core.fsmonitor` 单独运行不会弹窗；尚未捕捉到原始报错发生时该 Git 进程的父进程和启动参数。长期驻留的 `cmd.exe` 另有 Claude Code MCP 服务等来源，不能仅凭数量归因于 Git 或 Codex。
 
 ## 排查与临时处理
 
